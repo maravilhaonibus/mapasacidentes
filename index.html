@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa de Acidentes — Marcar por Lat/Lng</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+  /* Força o popup do Leaflet a crescer para comportar todo o conteúdo */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-content {
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+}
+
+/* Ajusta a largura e evita vazamento de conteúdo */
+.leaflet-popup-content-wrapper {
+  width: 320px !important;
+  max-width: 320px !important;
+}
+
+/* Garante que a descrição quebre linha e nunca saia pra fora */
+.desc-box {
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  display: block;
+  max-width: 100%;
+}
+
+    html,body,#map { height: 100%; margin: 0; padding: 0; }
+    body{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .controls{
+  position:absolute;
+  top:12px;
+  left:12px;
+  z-index:400;
+  background:rgba(255,255,255,0.95);
+  padding:8px;
+  border-radius:6px;
+  box-shadow:0 6px 18px rgba(0,0,0,0.12);
+  width: 320px;
+  min-width:150px;
+  font-size:13px;
+}
+    .controls input{ width: 100%; margin: 6px 0; padding: 6px; box-sizing: border-box; }
+    .controls button{ padding: 6px; margin-top: 6px; cursor: pointer; }
+
+    /* Estilo do ponto de calor (pulso vermelho/laranja) */
+    .heat-circle {
+  width: 18px; height: 18px; margin-left: -9px; margin-top: -9px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.9);
+  animation: pulse 1.6s infinite;
+  box-shadow: 0 0 12px rgba(255,255,255,0.9);
+  display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    pointer-events: none; /* impede clique no texto */
+}
+
+.heat-red {
+  background: rgba(220,20,60,1);
+  box-shadow: 0 0 12px 6px rgba(220,20,60,0.35);
+  box-shadow: 0 0 12px rgba(255,255,255,0.9);
+  display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.heat-yellow {
+  background: rgb(255, 204, 0);
+  box-shadow: 0 0 12px 6px rgba(255,140,0,0.35);
+  box-shadow: 0 0 12px rgba(255,255,255,0.9);
+  display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+    @keyframes pulse {
+      0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(220,20,60,0.35); }
+      70% { transform: scale(1.4); box-shadow: 0 0 0 18px rgba(220,20,60,0); }
+      100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(220,20,60,0); }
+    }
+
+    /* Marcaçao grande (para representar calor mais amplo) */
+    .heat-area {
+      pointer-events: none; /* não atrapalha cliques */
+    }
+
+    .legend { font-size: 13px; }
+
+    /* estilos do popup custom */
+.popup-modern{background:#fff;border-radius:14px;box-shadow:0 3px 12px rgba(0,0,0,.25);padding:0;font-family:'Segoe UI',sans-serif;width:260px;}
+.popup-header{background:#0057d8;color:#fff;padding:6px 10px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;}
+.popup-title{font-size:14px;font-weight:bold;}
+.popup-min-btn{background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0;}
+.popup-body{padding:10px;}
+.popup-body input,.popup-body select,.popup-body textarea{width:100%;margin-top:4px;margin-bottom:10px;padding:6px;border-radius:6px;border:1px solid #ccc;font-size:13px;}
+.popup-add-btn{width:100%;padding:8px;background:#0057d8;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;}
+.popup-mini-icon{background:#0057d8;color:#fff;padding:4px 6px;border-radius:10px;cursor:pointer;font-size:13px;display:inline-block;}
+  </style>
+</head>
+<body>
+  <!-- Tela de login -->
+<div id="loginScreen" style="
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background: linear-gradient(180deg, #f5f5f7, #e9e9ec);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+">
+    <div style="
+        background:white;
+        padding:40px 50px;
+        border-radius:18px;
+        box-shadow:0 10px 35px rgba(0,0,0,0.12);
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        width: 340px;
+        text-align:center;
+    ">
+        <h2 style="
+            margin:0 0 20px 0;
+            font-weight:600;
+            color:#ff0000;
+            font-size:22px;
+            line-height:1.3;
+        ">
+            Acesso Privado!
+        </h2>
+
+        <p style="margin-bottom:20px; color:#6e6e73; font-size:14px;">
+            Digite a senha para continuar
+        </p>
+
+        <input type="password" id="passwordInput" placeholder="Senha" style="
+            width:100%;
+            padding:12px 14px;
+            font-size:16px;
+            border-radius:12px;
+            border:1px solid #d2d2d7;
+            background:#f5f5f7;
+            outline:none;
+            transition:0.2s;
+        "
+        onfocus="this.style.borderColor='#007aff'; this.style.background='white';"
+        onblur="this.style.borderColor='#d2d2d7'; this.style.background='#f5f5f7';"
+        />
+
+        <button id="passwordBtn" style="
+            margin-top:18px;
+            width:100%;
+            padding:12px;
+            background:#007aff;
+            border:none;
+            color:white;
+            font-size:16px;
+            border-radius:12px;
+            cursor:pointer;
+            font-weight:500;
+            transition:0.2s;
+        "
+        onmouseover="this.style.background='#006ae6';"
+        onmouseout="this.style.background='#007aff';"
+        >
+            Entrar
+        </button>
+
+        <p id="passwordMsg" style="color:#ff3b30; margin-top:15px; font-size:14px;"></p>
+    </div>
+</div>
+
+  <div id="map"></div>
+
+  <div id="controlsBox" class="controls">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <strong style="font-size:13px;">Marcar acidente</strong>
+      <button id="minCtrl" aria-label="Minimizar" style="background:#7c7b78;color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;">–</button>
+    </div>
+
+    <label class="legend">Cidade alvo: <span id="cityName">Defina nas configurações</span></label>
+    <input id="lat" type="text" placeholder="Latitude (ex: -23.550520)" />
+    <input id="lng" type="text" placeholder="Longitude (ex: -46.633308)" />
+    <input id="bus" type="text" placeholder="Número do ônibus (painel)" />
+    <label>Data do acidente:</label>
+    <input id="popupDate" type="date" />
+    <label>Tipo de acidente:</label>
+    <br>
+    <select id="popupType">
+      <option value="Colisão">Colisão</option>
+      <option value="Abalroamento">Abalroamento</option>
+      <option value="Choque">Choque</option>
+      <option value="Queda">Queda</option>
+      <option value="Atropelamento">Atropelamento</option>
+      <option value="Tombamento/Capotamento">Tombamento/Capotamento</option>
+      <option value="Danos ao patrimônio público">Danos ao patrimônio público</option>
+      <option value="Incêndio/Pane elétrica">Incêndio/Pane elétrica</option>
+      <option value="Passageiro passando mal">Passageiro passando mal</option>
+    </select>
+    <br>
+
+    <label>Descrição:</label>
+    <textarea id="popupDesc" placeholder="Descreva o acidente..." style="height: 50px;"></textarea>
+    <br>
+    <label>Cor do ponto de calor:</label>
+<br>
+
+<div style="display:flex; gap:6px; margin-bottom:6px;">
+  <button id="colorRed" style="flex:1; background:#d62828; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer;">
+    Vermelho
+  </button>
+
+  <button id="colorOrange" style="flex:1; background:#f7ca00; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer;">
+    Amarelo
+  </button>
+</div>
+
+    <button id="addBtn">Adicionar ponto de acidente</button>
+    <button id="clearBtn">Limpar todos os pontos</button>
+    <hr />
+    <small>Dica: clique no mapa para usar a coordenada clicada.</small>
+  </div>
+  <!-- Ícone mínimo que aparece quando o painel é minimizado -->
+  <div id="miniIcon" title="Abrir painel" style="position:absolute;left:12px;top:12px;z-index:600;display:none;">
+    <button aria-label="Abrir painel" style="background:#7c7b78;color:#fff;border:none;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px;">Marcar ▸</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="filtro.js"></script>
+  <label>Filtrar por data:</label>
+  <input type="date" id="filtro-data" onchange="filtrarPorData()">
+
+
+
+
+  <script>
+    // === CONFIGURAÇÃO INICIAL ===
+    // Altere aqui para centralizar o mapa na cidade desejada
+    const CITY_CENTER_LAT = -22.744722;   // Itaboraí - RJ
+    let savedPoints = JSON.parse(localStorage.getItem("heatPoints")) || [];
+
+    function savePointsToStorage(){
+      localStorage.setItem("heatPoints", JSON.stringify(savedPoints));
+    }
+
+    const CITY_CENTER_LNG = -42.859722;
+    const CITY_ZOOM = 13;
+    const CITY_NAME = 'Itaboraí - RJ';
+
+    document.getElementById('cityName').textContent = CITY_NAME;
+
+    // === INICIALIZA MAPA ===
+    const map = L.map('map').setView([CITY_CENTER_LAT, CITY_CENTER_LNG], CITY_ZOOM);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // grupo para armazenar pontos adicionados
+    const accidents = L.layerGroup().addTo(map);
+
+    // cor selecionada por padrão
+    let selectedColor = 'red';
+
+    // atualiza visual dos botões de cor
+    function refreshColorButtonsUI() {
+      const redBtn = document.getElementById('colorRed');
+      const orangeBtn = document.getElementById('colorOrange');
+      if (!redBtn || !orangeBtn) return;
+      if (selectedColor === 'red') {
+        redBtn.style.boxShadow = '0 0 0 3px rgba(214,40,40,0.3)';
+        orangeBtn.style.boxShadow = 'none';
+        redBtn.style.transform = 'scale(1.03)';
+        orangeBtn.style.transform = 'scale(1)';
+      } else {
+        orangeBtn.style.boxShadow = '0 0 0 3px rgba(247,127,0,0.25)';
+        redBtn.style.boxShadow = 'none';
+        orangeBtn.style.transform = 'scale(1.03)';
+        redBtn.style.transform = 'scale(1)';
+      }
+    }
+
+    // eventos dos botões do painel de controle
+    document.getElementById('colorRed').addEventListener('click', () => {
+      selectedColor = 'red';
+      refreshColorButtonsUI();
+    });
+    document.getElementById('colorOrange').addEventListener('click', () => {
+      selectedColor = 'orange';
+      refreshColorButtonsUI();
+    });
+    refreshColorButtonsUI();
+
+    // carrega pontos salvos ao iniciar
+    loadSavedPoints();
+
+    function getFillColorFor(color){
+      return color === 'orange' ? 'rgba(255,140,0,0.35)' : 'rgba(220,20,60,0.35)';
+    }
+    function getSmallFillColorFor(color){
+      return color === 'orange' ? 'rgba(255,140,0,1)' : 'rgba(220,20,60,1)';
+    }
+
+    function loadSavedPoints(){
+      accidents.clearLayers();
+      savedPoints.forEach(p => {
+        // cria ícone com cor correta
+        const dotHtml = `<div class="heat-circle" title="Acidente" style="
+            background: ${p.color === 'orange' ? 'rgba(247,127,0,1)' : 'rgba(220,20,60,1)'};
+            box-shadow: 0 0 12px 6px ${p.color === 'orange' ? 'rgba(255,140,0,0.35)' : 'rgba(220,20,60,0.35)'};"></div>`;
+        const icon = L.divIcon({
+  className: '',
+html: `<div class="heat-circle ${p.color === 'red' ? 'heat-red' : 'heat-yellow'}">${p.bus || ''}</div>`,
+iconSize: [18,18]
+});
+        const marker = L.marker([p.lat, p.lng], { icon }).addTo(accidents);
+        const heatArea = L.circle([p.lat, p.lng], {
+          radius: p.radius || 80,
+          className: 'heat-area',
+          color: null,
+          fillColor: getFillColorFor(p.color || 'red'),
+          fillOpacity: 0.6
+        }).addTo(accidents);
+
+        heatArea._date = p.date;
+        marker._date = p.date;
+
+        // manter referência de id no layer para permitir remoção
+        marker._accidentId = p.id;
+        heatArea._accidentId = p.id;
+
+        const popupHtml = `
+          <b>Ônibus:</b> ${escapeHtml(p.bus||'—')}<br>
+          <b>Data:</b> ${escapeHtml(p.date||'—')}<br>
+          <b>Tipo:</b> ${escapeHtml(p.type||'—')}<br>
+          <b>Descrição:</b><br>
+          <div class="desc-box">${escapeHtml(p.desc||'—')}</div><br>
+          <button onclick="removeAccident('${p.id}')" style="background:#c62828;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;">Excluir este ponto</button>
+        `;
+        marker.bindPopup(popupHtml);
+      });
+    }
+
+    // --- Normalizar e expor os pontos que já estão salvos ---
+// Certifique-se de chamar isto depois que savedPoints for carregado
+window.allPoints = (window.allPoints && Array.isArray(window.allPoints)) ? window.allPoints : [];
+
+// Se você já tem savedPoints, copie para allPoints (normaliza data)
+if (typeof savedPoints !== "undefined" && Array.isArray(savedPoints)) {
+  window.allPoints = savedPoints.map(p => ({
+    id: p.id,
+    lat: Number(p.lat),
+    lng: Number(p.lng),
+    date: p.date ? (new Date(p.date)).toISOString().slice(0,10) : null, // YYYY-MM-DD
+    type: p.type || '',
+    color: p.color || 'red',
+    bus: p.bus || '',
+    radius: p.radius || 80,
+    desc: p.desc || ''
+  }));
+}
+
+// Função que o filtro.js chama para obter todos os pontos
+window.getAllPoints = () => window.allPoints.slice(); // retorna cópia
+
+// Função que o filtro.js chama para redesenhar apenas os pontos filtrados
+window.redesenhar = function(points) {
+  // limpa camada
+  accidents.clearLayers();
+
+  // reconstrói apenas os pontos passados
+  points.forEach(p => {
+    const iconHtml = `<div class="heat-circle ${p.color === 'red' ? 'heat-red' : 'heat-yellow'}" title="Acidente">${escapeHtml(p.bus||'')}</div>`;
+    const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [18,18] });
+    const marker = L.marker([p.lat, p.lng], { icon }).addTo(accidents);
+    const heatArea = L.circle([p.lat, p.lng], {
+      radius: p.radius || 80,
+      className: 'heat-area',
+      color: null,
+      fillColor: getFillColorFor(p.color || 'red'),
+      fillOpacity: 0.6
+    }).addTo(accidents);
+
+    // atributos para consistência (úteis para popups/remover)
+    marker._accidentId = p.id;
+    heatArea._accidentId = p.id;
+    marker._date = p.date;
+    heatArea._date = p.date;
+    marker._type = p.type;
+    heatArea._type = p.type;
+
+    // popup (reaplicar se quiser)
+    const popupHtml = `
+      <b>Ônibus:</b> ${escapeHtml(p.bus||'—')}<br>
+      <b>Data:</b> ${escapeHtml(p.date||'—')}<br>
+      <b>Tipo:</b> ${escapeHtml(p.type||'—')}<br>
+      <b>Descrição:</b><br>
+      <div class="desc-box">${escapeHtml(p.desc||'—')}</div><br>
+      <button onclick="removeAccident('${p.id}')" style="background:#c62828;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;">Excluir este ponto</button>
+    `;
+    marker.bindPopup(popupHtml);
+  });
+
+  // DEBUG
+  console.log("redesenhar: pontos no mapa =", accidents.getLayers().length);
+ };
+
+
+    // adiciona um marcador com estilo de "ponto de calor" e popup com número do ônibus
+    function addAccident(lat, lng, busNumber, date, type, desc, color) {
+  if (!lat || !lng) return;
+  const latNum = parseFloat(lat);
+  const lngNum = parseFloat(lng);
+  if (isNaN(latNum) || isNaN(lngNum)) return;
+
+  // cria id único (string)
+  const id = Date.now().toString() + Math.floor(Math.random()*1000).toString();
+  const useColor = color || selectedColor || 'red';
+
+  // html do ícone com número do ônibus dentro do círculo
+  const iconHtml = `<div class="heat-circle ${useColor === 'red' ? 'heat-red' : 'heat-yellow'}" title="Acidente">${escapeHtml(busNumber || '')}</div>`;
+
+  const icon = L.divIcon({
+    className: '',
+    html: iconHtml,
+    iconSize: [18,18]
+  });
+
+  const marker = L.marker([latNum, lngNum], { icon }).addTo(accidents);
+
+  const heatArea = L.circle([latNum, lngNum], {
+    radius: 80,
+    className: 'heat-area',
+    color: null,
+    fillColor: getFillColorFor(useColor),
+    fillOpacity: 0.6
+  }).addTo(accidents);
+
+  marker._date = date;
+  heatArea._date = date;
+
+  // salvar id nas camadas para facilitar remoção
+  marker._accidentId = id;
+  heatArea._accidentId = id;
+
+  // montar popup com botão de exclusão
+  const popupHtml = `
+    <b>Ônibus:</b> ${escapeHtml(busNumber||'—')}<br>
+    <b>Data:</b> ${escapeHtml(date||'—')}<br>
+    <b>Tipo:</b> ${escapeHtml(type||'—')}<br>
+    <b>Descrição:</b><br>
+    <div class="desc-box">${escapeHtml(desc||'—')}</div><br>
+    <button onclick="removeAccident('${id}')" 
+    style="background:#c62828;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;">Excluir este ponto</button>
+  `;
+  marker.bindPopup(popupHtml);
+
+  // armazenar no array e no localStorage — IMPORTANT: salvar a cor do ponto (useColor)
+  savedPoints.push({
+    id: id,
+    lat: latNum,
+    lng: lngNum,
+    bus: busNumber || '',
+    date: date || '',
+    type: type || '',
+    desc: desc || '',
+    radius: 80,
+    color: useColor
+  });
+  savePointsToStorage();
+
+  window.removeAccident = function(id){
+    savedPoints = savedPoints.filter(p => p.id !== id);
+    savePointsToStorage();
+    loadSavedPoints();
+  };
+
+  // centraliza suavemente
+  map.panTo([latNum, lngNum]);
+
+    map.on("click", (e)=>{
+    document.getElementById("lat").value = e.latlng.lat.toFixed(6);
+    document.getElementById("lng").value = e.latlng.lng.toFixed(6);
+  });
+
+ document.getElementById("addBtn").addEventListener("click", ()=>{
+    addAccident(
+      document.getElementById("lat").value,
+      document.getElementById("lng").value,
+      document.getElementById("bus").value,
+      document.getElementById("popupDate").value,
+      document.getElementById("popupType").value,
+      document.getElementById("popupDesc").value,
+      selectedColor
+    );
+  });
+
+  // limpar todos os pontos
+  document.getElementById("clearBtn").addEventListener("click", ()=>{
+    if(!confirm("Tem certeza que deseja remover todos os pontos?")) return;
+    savedPoints = [];
+    savePointsToStorage();
+    loadSavedPoints();
+  });
+}
+
+    // segurança básica ao injetar texto em HTML
+      function escapeHtml(str){
+    if(!str) return '';
+    return str.replace(/[&<>"']/g, function(c){
+      return ({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        '"':'&quot;',
+        "'":"&#39;"
+      })[c];
+    })
+  }
+
+  const btn = document.getElementById("passwordBtn");
+  const msg = document.getElementById("passwordMsg");
+
+  btn.addEventListener("click", ()=>{
+    const pwd = document.getElementById("passwordInput").value;
+    if(pwd === "123"){
+      document.getElementById("loginScreen").style.display = "none";
+    } else {
+      msg.textContent = "Senha incorreta!";
+    }
+  });
+
+    // liga botão - handler do painel principal
+    document.getElementById('addBtn').addEventListener('click', ()=>{
+      const lat = document.getElementById('lat').value.trim();
+      const lng = document.getElementById('lng').value.trim();
+
+      // ler ônibus a partir de possíveis campos (mais robusto)
+      const bus = (document.getElementById('popupBus') && document.getElementById('popupBus').value.trim()) || (document.getElementById('bus') && document.getElementById('bus').value.trim()) || '';
+      const date = (document.getElementById('popupDate') && document.getElementById('popupDate').value) || '';
+      const type = (document.getElementById('popupType') && document.getElementById('popupType').value) || '';
+      const desc = (document.getElementById('popupDesc') && document.getElementById('popupDesc').value) || '';
+
+      addAccident(lat,lng,bus,date,type,desc, selectedColor);
+      // atualiza visual e salva feita dentro de addAccident
+    });
+
+    // limpa
+    document.getElementById('clearBtn').addEventListener('click', ()=>{
+      accidents.clearLayers();
+      savedPoints = [];
+      savePointsToStorage();
+    });
+
+    // clicar no mapa preenche lat/lng nos inputs (popup com formulário local e cores)
+    map.on('click', function(e){
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+
+      // IDs locais (únicos) para evitar conflito com painel
+      const formHtml = `
+  <div style="min-width:300px;">
+    <strong>Cadastrar acidente</strong><br>
+
+    <label>Cor do ponto de calor:</label>
+    <div id="painel">
+    <div style="display:flex; gap:10px; margin:6px 0;">
+      <div id="colorRedPopup" 
+           style="width:26px;height:26px;border-radius:50%;background:#d62828;
+                  cursor:pointer;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.3);">
+      </div>
+
+      <div id="colorOrangePopup" 
+           style="width:26px;height:26px;border-radius:50%;background:#f7ca00;
+                  cursor:pointer;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.3);">
+      </div>
+    </div>
+  </div>
+
+          <label>Data do acidente:</label>
+          <input id="popupDateLocal" type="date" style="width:300xp; margin-bottom:6px;" />
+          <br>
+
+          <label>Tipo de acidente:</label>
+          <select id="popupTypeLocal" style="width:300xp; margin-bottom:6px;">
+            <option value="Colisão">Colisão</option>
+            <option value="Abalroamento">Abalroamento</option>
+            <option value="Choque">Choque</option>
+            <option value="Queda">Queda</option>
+            <option value="Atropelamento">Atropelamento</option>
+            <option value="Tombamento/Capotamento">Tombamento/Capotamento</option>
+            <option value="Danos ao patrimônio público">Danos ao patrimônio público</option>
+            <option value="Incêndio/Pane elétrica">Incêndio/Pane elétrica</option>
+            <option value="Passageiro passando mal">Passageiro passando mal</option>
+          </select>
+          <br>
+
+          <label>Nº do ônibus:</label>
+          <input id="popupBusLocal" type="text" placeholder="Ônibus" style="width:300xp; margin-bottom:6px;" />
+          <br>
+
+          <label>Descrição:</label>
+          <textarea id="popupDescLocal" placeholder="Descreva o acidente..." style="width:300xp; height:60px; margin-bottom:6px;"></textarea>
+          <br>
+
+          <button id="popupAddLocal" style="width:250xp; margin-top:4px;">Adicionar</button>
+        </div>
+      `;
+
+      const tempPopup = L.popup({ maxWidth: 320 }).setLatLng(e.latlng).setContent(formHtml).openOn(map);
+
+      // define cor padrão do popup como a selecionada no painel
+     let selectedColor = window.selectedColor || 'red';
+window.selectedColor = selectedColor;
+
+
+      // safe wait to ensure DOM dentro do popup foi injetad
+
+        function refreshPopupColorUI(){
+          if(!redEl || !orangeEl) return;
+          if (popupSelectedColor === 'red') {
+            redEl.style.border = "3px solid black";
+            orangeEl.style.border = "3px solid white";
+          } else {
+            orangeEl.style.border = "3px solid black";
+            redEl.style.border = "3px solid white";
+          }
+        }
+        refreshPopupColorUI();
+
+        if (redEl) redEl.addEventListener("click", () => {
+          popupSelectedColor = 'red';
+          // sincroniza também a cor global do painel
+          selectedColor = 'red';
+          refreshPopupColorUI();
+          refreshColorButtonsUI();
+        });
+        if (orangeEl) orangeEl.addEventListener("click", () => {
+          popupSelectedColor = 'orange';
+          selectedColor = 'orange';
+          refreshPopupColorUI();
+          refreshColorButtonsUI();
+        });
+
+        const btn = document.getElementById('popupAddLocal');
+        if (btn) {
+          btn.onclick = () => {
+            const bus = document.getElementById('popupBusLocal').value.trim();
+            const date = document.getElementById('popupDateLocal').value;
+            const type = document.getElementById('popupTypeLocal').value;
+            const desc = document.getElementById('popupDescLocal').value;
+            addAccident(lat, lng, bus, date, type, desc, popupSelectedColor);
+            map.closePopup(tempPopup);
+          };
+        }
+      }, 50);
+    
+
+    function removeAccident(id){
+      // remove layers do grupo 'accidents' que contenham esse id
+      const toRemove = [];
+      accidents.eachLayer(layer => {
+        if (layer._accidentId && String(layer._accidentId) === String(id)) {
+          toRemove.push(layer);
+        }
+      });
+      toRemove.forEach(l => accidents.removeLayer(l));
+
+      // remove do savedPoints e atualiza localStorage
+      savedPoints = savedPoints.filter(p => String(p.id) !== String(id));
+      savePointsToStorage();
+    }
+    window.removeAccident = removeAccident; // permite uso do onclick no popup
+
+    // lógica de minimizar/abrir o painel de controles
+    (function(){
+      const controls = document.getElementById('controlsBox');
+      const mini = document.getElementById('miniIcon');
+      const btn = document.getElementById('minCtrl');
+      if(!controls || !mini || !btn) return;
+
+      btn.addEventListener('click', ()=>{
+        controls.style.display = 'none';
+        mini.style.display = 'block';
+      });
+      mini.addEventListener('click', ()=>{
+        controls.style.display = 'block';
+        mini.style.display = 'none';
+      });
+
+      // pequeno ajuste: manter entradas com fonte uniforme
+      const inputs = controls.querySelectorAll('input, select, textarea, button, label');
+      inputs.forEach(i=>{ i.style.fontFamily = 'Segoe UI, system-ui, Roboto, Arial, sans-serif'; i.style.fontSize = '13px'; });
+    })();
+
+    // tela de login simples
+    const passwordInput = document.getElementById('passwordInput');
+    const passwordBtn = document.getElementById('passwordBtn');
+    const passwordMsg = document.getElementById('passwordMsg');
+    const loginScreen = document.getElementById('loginScreen');
+
+    passwordBtn.addEventListener('click', () => {
+        const senha = passwordInput.value.trim();
+        if(senha === '1234'){
+            loginScreen.style.display = 'none';
+        } else {
+            passwordMsg.textContent = 'Senha incorreta!';
+            passwordInput.value = '';
+            passwordInput.focus();
+        }
+    });
+
+    passwordInput.addEventListener('keyup', (e) => {
+        if(e.key === 'Enter') passwordBtn.click();
+    });
+
+  // ---- Reaplicar listeners sempre que um popup for aberto ----
+map.on('popupopen', function(e) {
+  const popup = e.popup;
+  const popupEl = popup.getElement && popup.getElement();
+  if (!popupEl) return;
+
+  // evita que cliques dentro do popup sejam repassados ao mapa
+  L.DomEvent.disableClickPropagation(popupEl);
+  L.DomEvent.disableScrollPropagation(popupEl);
+
+  // pegar elementos dentro do popup recém-criado
+  const redBtn = popupEl.querySelector('#colorRedPopup');
+  const orangeBtn = popupEl.querySelector('#colorOrangePopup');
+  const addBtn = popupEl.querySelector('#popupAddLocal');
+
+  // destaque visual (ajusta bordas)
+  function highlightSelectedColorPopup(id){
+    const r = popupEl.querySelector('#colorRedPopup');
+    const o = popupEl.querySelector('#colorOrangePopup');
+    if(r) r.style.border = '3px solid #fff';
+    if(o) o.style.border = '3px solid #fff';
+    const sel = popupEl.querySelector('#' + id);
+    if(sel) sel.style.border = '3px solid #000';
+  }
+
+  // função segura para anexar listener (remove antes se necessário)
+  function attach(el, fn){
+    if(!el) return;
+    // remover handlers anteriores para evitar múltiplos binds
+    el.onclick = null;
+    el.removeEventListener && el.removeEventListener('click', fn);
+    el.addEventListener('click', function(event){
+      event.stopPropagation();
+      event.preventDefault();
+      fn(event);
+    });
+  }
+
+  // handlers
+  attach(redBtn, function(){
+    selectedColor = 'red';
+    highlightSelectedColorPopup('colorRedPopup');
+    if (typeof refreshColorButtonsUI === 'function') refreshColorButtonsUI();
+  });
+
+  attach(orangeBtn, function(){
+    selectedColor = 'orange';
+    highlightSelectedColorPopup('colorOrangePopup');
+    if (typeof refreshColorButtonsUI === 'function') refreshColorButtonsUI();
+  });
+
+  // botão Adicionar dentro do popup (garante adicionar local)
+  if(addBtn){
+    // remove handler antigo e adiciona novo
+    addBtn.onclick = null;
+    addBtn.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      ev.preventDefault();
+
+      // valores do form dentro do popup (use lat/lng já disponíveis no popup)
+      const latlng = popup.getLatLng ? popup.getLatLng() : null;
+      const lat = latlng ? latlng.lat : null;
+      const lng = latlng ? latlng.lng : null;
+
+      const bus = (popupEl.querySelector('#popupBusLocal') && popupEl.querySelector('#popupBusLocal').value.trim()) || '';
+      const date = (popupEl.querySelector('#popupDateLocal') && popupEl.querySelector('#popupDateLocal').value) || '';
+      const type = (popupEl.querySelector('#popupTypeLocal') && popupEl.querySelector('#popupTypeLocal').value) || '';
+      const desc = (popupEl.querySelector('#popupDescLocal') && popupEl.querySelector('#popupDescLocal').value) || '';
+
+      // chama sua função existente para adicionar (certifique-se que addAccident está global)
+      if (typeof addAccident === 'function') {
+        addAccident(lat, lng, bus, date, type, desc, selectedColor);
+        map.closePopup(); // fecha o popup após adicionar
+      } else {
+        console.warn('addAccident() não encontrada');
+      }
+    });
+  }
+
+  // aplica destaque inicial conforme selectedColor atual
+  if(selectedColor === 'red') highlightSelectedColorPopup('colorRedPopup');
+  else highlightSelectedColorPopup('colorOrangePopup');
+});
+
+ window.redesenhar = function(points) {
+  marcadores.forEach(m => map.removeLayer(m));
+  marcadores = [];
+
+  points.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "heat-circle " + (p.cor === "red" ? "heat-red" : "heat-yellow");
+
+    const icone = L.divIcon({
+      html: el,
+      iconSize: [18, 18]
+    });
+
+    const m = L.marker([p.lat, p.lng], { icon: icone }).addTo(map);
+    marcadores.push(m);
+  });
+
+  document.getElementById("filteredCount").textContent =
+    "Total: " + points.length;
+};
+
+ let heatCircles = [];
+
+function addHeatCircle(lat, lng, intensity, data) {
+    const circle = L.circle([lat, lng], {
+        radius: intensity,
+        color: "red",
+        fillColor: "red",
+        fillOpacity: 0.4
+    }).addTo(map);
+
+    heatCircles.push({
+        layer: circle,
+        date: data
+    });
+}
+
+ function filtrarPorData() {
+    const filtro = document.getElementById("filtro-data").value;
+
+    accidents.eachLayer(layer => {
+        if (!layer._date) return;
+
+        if (!filtro || layer._date === filtro) {
+            if (!map.hasLayer(layer)) map.addLayer(layer);
+        } else {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+        }
+    });
+}
+  function redesenharHeat(points) {
+  heatCircles.forEach(h => map.removeLayer(h.layer));
+  heatCircles = [];
+
+  points.forEach(p => {
+    const circle = L.circle([p.lat, p.lng], {
+      radius: p.intensity || 50,
+      color: "red",
+      fillColor: "red",
+      fillOpacity: 0.4
+    }).addTo(map);
+
+    heatCircles.push(circle);
+  });
+}
+
+  window.redesenhar(filtrados);
+  redesenharHeat(filtrados);
+  
+
+   function carregarAcidentes() {
+  const salvos = JSON.parse(localStorage.getItem("heatPoints")) || [];
+
+  window.allPoints = salvos.map(p => ({
+    id: p.id,
+    lat: Number(p.lat),
+    lng: Number(p.lng),
+    date: p.date,
+    type: p.type,
+    color: p.color || 'red',
+    bus: p.bus || '',
+    radius: p.radius || 80,
+    desc: p.desc || ''
+  }));
+
+  window.redesenhar(window.allPoints);
+   console.log("ACIDENTES CARREGADOS:", window.allPoints.length);
+}
+
+
+ 
+
+
+  carregarAcidentes();
+
+  function salvarAcidentes() {
+  localStorage.setItem("acidentes", JSON.stringify(window.allPoints));
+}
+
+  
+
+
+
+  </script>
+</body>
+</html>
