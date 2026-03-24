@@ -323,11 +323,15 @@
             background: ${p.color === 'orange' ? 'rgba(247,127,0,1)' : 'rgba(220,20,60,1)'};
             box-shadow: 0 0 12px 6px ${p.color === 'orange' ? 'rgba(255,140,0,0.35)' : 'rgba(220,20,60,0.35)'};"></div>`;
         const icon = L.divIcon({
-  className: '',
-html: `<div class="heat-circle ${p.color === 'red' ? 'heat-red' : 'heat-yellow'}">${p.bus || ''}</div>`,
-iconSize: [18,18]
-});
+       className: '',
+       html: `<div class="heat-circle ${p.color === 'red' ? 'heat-red' : 'heat-yellow'}"></div>`,
+       iconSize: [18,18]
+       });
+
         const marker = L.marker([p.lat, p.lng], { icon }).addTo(accidents);
+        marker.on('click', function (e) {
+        L.DomEvent.stopPropagation(e);
+        });
         const heatArea = L.circle([p.lat, p.lng], {
           radius: p.radius || 80,
           className: 'heat-area',
@@ -339,7 +343,6 @@ iconSize: [18,18]
         heatArea._date = p.date;
         marker._date = p.date;
 
-        // manter referência de id no layer para permitir remoção
         marker._accidentId = p.id;
         heatArea._accidentId = p.id;
 
@@ -421,7 +424,7 @@ window.redesenhar = function(points) {
 
 
     // adiciona um marcador com estilo de "ponto de calor" e popup com número do ônibus
-    function addAccident(lat, lng, busNumber, date, type, desc, color) {
+  function addAccident(lat, lng, busNumber, date, type, desc, color) {
   if (!lat || !lng) return;
   const latNum = parseFloat(lat);
   const lngNum = parseFloat(lng);
@@ -432,7 +435,7 @@ window.redesenhar = function(points) {
   const useColor = color || selectedColor || 'red';
 
   // html do ícone com número do ônibus dentro do círculo
-  const iconHtml = `<div class="heat-circle ${useColor === 'red' ? 'heat-red' : 'heat-yellow'}" title="Acidente">${escapeHtml(busNumber || '')}</div>`;
+  const iconHtml = `<div class="heat-circle ${useColor === 'red' ? 'heat-red' : 'heat-yellow'}" title="Acidente">${escapeHtml()}</div>`;
 
   const icon = L.divIcon({
     className: '',
@@ -901,17 +904,11 @@ function addHeatCircle(lat, lng, intensity, data) {
    console.log("ACIDENTES CARREGADOS:", window.allPoints.length);
 }
 
-
- 
-
-
   carregarAcidentes();
 
   function salvarAcidentes() {
   localStorage.setItem("acidentes", JSON.stringify(window.allPoints));
 }
-
-  
 
 
 
